@@ -1,103 +1,176 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Box, Typography, CircularProgress, Paper, Button, Container } from '@mui/material';
+import { useAppDispatch, useAppSelector } from '@/lib/hooks';
+import { loadProfile, resetProfile } from '@/lib/redux/slice/profileSlice';
+import dashboardService, { DashboardData } from '@/client-lib/service/dashboard-service';
+import CreateProjectModal from '@/components/global/createProjectModal';
+import FolderIcon from '@mui/icons-material/Folder';
+import AddIcon from '@mui/icons-material/Add';
+import PeopleIcon from '@mui/icons-material/People';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import { useAlert } from '@/lib/redux/slice/alertSlice';
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+const DashboardPage = () => {
+  const [authChecked, setAuthChecked] = useState(false);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [loadingDashboard, setLoadingDashboard] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const { showAlertMessage } = useAlert();
+
+  const router = useRouter();
+  const dispatch = useAppDispatch();
+
+  const { data: profile, loading: profileLoading } = useAppSelector(state => state.profile);
+
+  useEffect(() => {
+    verifyTokenAndLoadProfile();
+  }, [router, dispatch]);
+
+  const verifyTokenAndLoadProfile = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      router.replace('/login');
+      return;
+    }
+
+    try {
+      await dispatch(loadProfile()).unwrap();
+      await fetchDashboardData();
+    } catch (err) {
+      localStorage.removeItem('token');
+      dispatch(resetProfile());
+      router.replace('/login');
+      return;
+    } finally {
+      setAuthChecked(true);
+      setLoadingDashboard(false);
+    }
+  };
+
+  const refreshDashboard = async () => {
+    await fetchDashboardData();
+  };
+
+  const fetchDashboardData = async () => {
+    try {
+      const data = await dashboardService.getDashboardData();
+      setDashboardData(data);
+    } catch (err: any) {
+      showAlertMessage(err?.message || "fail to load dashboard data.")
+    }
+  };
+
+  if (!authChecked || profileLoading || loadingDashboard) {
+    return (
+      <Box className="flex justify-center items-center min-h-[60vh] flex-col">
+        <CircularProgress size={30} className="mb-4" />
+        <Typography>Loading Dashboard...</Typography>
+      </Box>
+    );
+  }
+
+  const totalCompletedTasks = dashboardData?.projects.reduce(
+    (sum, project) => sum + (project.completed || 0),
+    0
   );
-}
+
+  return (
+    <Box className="min-h-screen bg-gray-50 py-4 sm:py-6 md:py-8">
+      <Container maxWidth="lg" className="px-4 sm:px-6">
+        <Box className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
+          <Typography variant="h4" className="font-semibold text-2xl sm:text-3xl md:text-4xl">
+            Welcome, {profile?.name || profile?.email}
+          </Typography>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setModalOpen(true)}
+            className="normal-case px-4 sm:px-6 w-full sm:w-auto"
+          >
+            Create Project
+          </Button>
+        </Box>
+
+        {dashboardData && (
+          <Box className="flex flex-col sm:flex-row gap-4 sm:gap-6 mb-6 sm:mb-8">
+            <Paper className="p-4 sm:p-6 flex-1 flex items-center gap-3 sm:gap-4 rounded-xl hover:shadow-lg transition-shadow">
+              <Box className="bg-blue-50 rounded-full p-3 sm:p-4 flex shrink-0">
+                <PeopleIcon className="text-blue-600" style={{ fontSize: 28 }} sx={{ fontSize: { xs: 24, sm: 28, md: 32 } }} />
+              </Box>
+              <Box className="min-w-0">
+                <Typography variant="body2" className="text-gray-600 text-xs sm:text-sm">Total Users</Typography>
+                <Typography variant="h4" className="font-semibold text-2xl sm:text-3xl md:text-4xl">{dashboardData.users}</Typography>
+              </Box>
+            </Paper>
+
+            <Paper className="p-4 sm:p-6 flex-1 flex items-center gap-3 sm:gap-4 rounded-xl hover:shadow-lg transition-shadow">
+              <Box className="bg-green-50 rounded-full p-3 sm:p-4 flex shrink-0">
+                <CheckCircleIcon className="text-green-700" style={{ fontSize: 28 }} sx={{ fontSize: { xs: 24, sm: 28, md: 32 } }} />
+              </Box>
+              <Box className="min-w-0">
+                <Typography variant="body2" className="text-gray-600 text-xs sm:text-sm">Completed Tasks</Typography>
+                <Typography variant="h4" className="font-semibold text-2xl sm:text-3xl md:text-4xl">{totalCompletedTasks}</Typography>
+              </Box>
+            </Paper>
+          </Box>
+        )}
+
+        <Box className="mb-4 sm:mb-6">
+          <Typography variant="h5" className="font-semibold text-xl sm:text-2xl">
+            Your Projects
+          </Typography>
+        </Box>
+
+        <Box className="max-h-[500px] sm:max-h-[600px] overflow-y-auto pr-1 sm:pr-2">
+          <Box className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+            {dashboardData?.projects.map(project => (
+              <Paper
+                key={project.id}
+                onClick={() => router.push(`/projects/${project.id}`)}
+                className="p-4 sm:p-6 rounded-xl cursor-pointer hover:shadow-lg transition-shadow"
+              >
+                <Box className="flex items-center mb-3 sm:mb-4">
+                  <FolderIcon className="text-blue-600 mr-2" style={{ fontSize: 24 }} sx={{ fontSize: { xs: 24, sm: 28 } }} />
+                  <Typography variant="h6" className="font-semibold truncate text-base sm:text-lg">
+                    {project.name}
+                  </Typography>
+                </Box>
+
+                <Box className="flex flex-col gap-1.5 sm:gap-2">
+                  <Box className="flex justify-between">
+                    <Typography variant="body2" className="text-gray-600 text-xs sm:text-sm">Total Tasks:</Typography>
+                    <Typography variant="body2" className="font-semibold text-xs sm:text-sm">{project.totalTask}</Typography>
+                  </Box>
+                  <Box className="flex justify-between">
+                    <Typography variant="body2" className="text-gray-600 text-xs sm:text-sm">Todo:</Typography>
+                    <Typography variant="body2" className="font-semibold text-orange-600 text-xs sm:text-sm">{project.todo}</Typography>
+                  </Box>
+                  <Box className="flex justify-between">
+                    <Typography variant="body2" className="text-gray-600 text-xs sm:text-sm">In Progress:</Typography>
+                    <Typography variant="body2" className="font-semibold text-blue-600 text-xs sm:text-sm">{project.inProcess}</Typography>
+                  </Box>
+                  <Box className="flex justify-between">
+                    <Typography variant="body2" className="text-gray-600 text-xs sm:text-sm">Completed:</Typography>
+                    <Typography variant="body2" className="font-semibold text-green-700 text-xs sm:text-sm">{project.completed}</Typography>
+                  </Box>
+                </Box>
+              </Paper>
+            ))}
+          </Box>
+        </Box>
+      </Container>
+
+      <CreateProjectModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onProjectCreated={refreshDashboard}
+      />
+    </Box>
+  );
+};
+
+export default DashboardPage;
